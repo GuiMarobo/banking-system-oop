@@ -19,5 +19,18 @@ This project is a refactored version of a banking system originally built using 
 
 ## How to Run
 
+1. **Clone this repository:**
+
 ```bash
-banco_poo.py
+git clone https://github.com/guimarobo/banking-system-oop.git
+cd banking-system-oop
+```
+
+2. **Run the project:**
+```bash
+python banco_poo.py
+```
+or if, you're on macOS/Linux:
+```bash
+python3 banco_poo.py
+```
