@@ -1,7 +1,29 @@
 import textwrap
 from abc import ABC, abstractmethod
 from datetime import datetime
+from functools import wraps
 
+
+class ContaIterador:
+    def __init__(self, contas):
+        self._contas = contas
+        self._index = 0
+
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self._index < len(self._contas):
+            conta = self._contas[self._index]
+            self._index += 1
+
+            return {
+                "numero": conta.numero,
+                "agencia": conta.agencia,
+                "titular": conta.cliente.nome,
+                "saldo": conta.saldo
+            }
+        else:
+            raise StopIteration
 
 class Cliente:
     def __init__(self, endereco):
@@ -129,9 +151,14 @@ class Historico:
             {
                 "tipo": transacao.__class__.__name__,
                 "valor": transacao.valor,
-                "data": datetime.now().strftime("%d-%m-%Y %H:%M:%s"),
+                "data": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             }
         )
+    
+    def gerar_relatorio(self, tipo=None):
+        for transacao in self._transacoes:
+            if tipo is None or transacao["tipo"] == tipo:
+                yield transacao
 
 
 class Transacao(ABC):
@@ -174,6 +201,15 @@ class Deposito(Transacao):
         if sucesso_transacao:
             conta.historico.adicionar_transacao(self)
 
+def log_transacao(funcao):
+    @wraps(funcao)
+    def wrapper(*args, **kwargs):
+        resultado = funcao(*args, **kwargs)
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{now}] Transação: {funcao.__name__.replace('_', ' ').title()}")
+        return resultado
+    return wrapper
 
 def menu():
     menu = """\n
@@ -202,7 +238,7 @@ def recuperar_conta_cliente(cliente):
     # FIXME: não permite cliente escolher a conta
     return cliente.contas[0]
 
-
+@log_transacao
 def depositar(clientes):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -220,7 +256,7 @@ def depositar(clientes):
 
     cliente.realizar_transacao(conta, transacao)
 
-
+@log_transacao
 def sacar(clientes):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -238,8 +274,8 @@ def sacar(clientes):
 
     cliente.realizar_transacao(conta, transacao)
 
-
-def exibir_extrato(clientes):
+@log_transacao
+def exibir_extrato(clientes, tipo=None):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
 
@@ -252,20 +288,18 @@ def exibir_extrato(clientes):
         return
 
     print("\n================ EXTRATO ================")
-    transacoes = conta.historico.transacoes
+    transacoes = list(conta.historico.gerar_relatorio(tipo=tipo))
 
-    extrato = ""
     if not transacoes:
-        extrato = "Não foram realizadas movimentações."
+        print("Não foram realizadas movimentações.")
     else:
-        for transacao in transacoes:
-            extrato += f"\n{transacao['tipo']}:\n\tR$ {transacao['valor']:.2f}"
+        for t in transacoes:
+            print(f"{t['tipo']}:\n\tR$ {t['valor']:.2f} em {t['data']}")
 
-    print(extrato)
     print(f"\nSaldo:\n\tR$ {conta.saldo:.2f}")
     print("==========================================")
 
-
+@log_transacao
 def criar_cliente(clientes):
     cpf = input("Informe o CPF (somente número): ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -284,7 +318,7 @@ def criar_cliente(clientes):
 
     print("\n=== Cliente criado com sucesso! ===")
 
-
+@log_transacao
 def criar_conta(numero_conta, clientes, contas):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -301,9 +335,18 @@ def criar_conta(numero_conta, clientes, contas):
 
 
 def listar_contas(contas):
-    for conta in contas:
+    iterador = ContaIterador(contas)
+    for conta_info in iterador:
         print("=" * 100)
-        print(textwrap.dedent(str(conta)))
+        print(f"Agência:\t{conta_info['agencia']}")
+        print(f"C/C:\t\t{conta_info['numero']}")
+        print(f"Titular:\t{conta_info['titular']}")
+        print(f"Saldo:\t\tR$ {conta_info['saldo']:.2f}")
+
+    # Método antigo   
+    # for conta in contas:
+    #     print("=" * 100)
+    #     print(textwrap.dedent(str(conta)))
 
 
 def main():
