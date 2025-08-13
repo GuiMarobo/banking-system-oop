@@ -1,8 +1,10 @@
 import textwrap
+import pytz
 from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import wraps
 
+timezone = pytz.timezone("America/Sao_Paulo")
 
 class ContaIterador:
     def __init__(self, contas):
@@ -52,6 +54,7 @@ class Conta:
         self._agencia = "0001"
         self._cliente = cliente
         self._historico = Historico()
+        self._limite_transacoes_diarias = 10
 
     @classmethod
     def nova_conta(cls, cliente, numero):
@@ -76,8 +79,18 @@ class Conta:
     @property
     def historico(self):
         return self._historico
+    
+    def atingiu_limite_diario(self):
+        total_hoje = self.historico.contar_transacoes_diarias(tipos={"Saque", "Deposito"})
+        if total_hoje >= self._limite_transacoes_diarias:
+            print(f"\n@@@ Limite diário de {self._limite_transacoes_diarias} transações atingido! @@@")
+            return True
+        return False
 
     def sacar(self, valor):
+        if self.atingiu_limite_diario():
+            return False
+        
         saldo = self.saldo
         excedeu_saldo = valor > saldo
 
@@ -95,6 +108,8 @@ class Conta:
         return False
 
     def depositar(self, valor):
+        if self.atingiu_limite_diario():
+            return False
         if valor > 0:
             self._saldo += valor
             print("\n=== Depósito realizado com sucesso! ===")
@@ -151,10 +166,20 @@ class Historico:
             {
                 "tipo": transacao.__class__.__name__,
                 "valor": transacao.valor,
-                "data": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+                "data": agora(),
             }
         )
-    
+
+    def contar_transacoes_diarias(self, tipos=None):
+        hoje = agora().date()
+        return sum(
+            1
+            for t in self._transacoes
+            if isinstance(t["data"], datetime)
+            and t["data"].date() == hoje
+            and (tipos is None or t["tipo"] in tipos)
+        )
+
     def gerar_relatorio(self, tipo=None):
         for transacao in self._transacoes:
             if tipo is None or transacao["tipo"] == tipo:
@@ -201,13 +226,15 @@ class Deposito(Transacao):
         if sucesso_transacao:
             conta.historico.adicionar_transacao(self)
 
+def agora():
+    return datetime.now(timezone)
+
 def log_transacao(funcao):
     @wraps(funcao)
     def wrapper(*args, **kwargs):
         resultado = funcao(*args, **kwargs)
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{now}] Transação: {funcao.__name__.replace('_', ' ').title()}")
+        data_atual = agora().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{data_atual}] Transação: {funcao.__name__.replace('_', ' ').title()}")
         return resultado
     return wrapper
 
@@ -294,7 +321,9 @@ def exibir_extrato(clientes, tipo=None):
         print("Não foram realizadas movimentações.")
     else:
         for t in transacoes:
-            print(f"{t['tipo']}:\n\tR$ {t['valor']:.2f} em {t['data']}")
+            data = t["data"]
+            data_str = data.strftime("%d-%m-%Y %H:%M:%S") if isinstance (data, datetime) else str(data)
+            print(f"{t['tipo']}:\n\tR$ {t['valor']:.2f} em {data_str}")
 
     print(f"\nSaldo:\n\tR$ {conta.saldo:.2f}")
     print("==========================================")
