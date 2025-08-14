@@ -9,6 +9,8 @@ This project is a refactored version of a banking system originally built using 
 - Perform deposits and withdrawals
 - Print transaction history
 - List existing accounts
+- Record all operations in a LOG.txt file with date and time
+
 
 ## Project Structure
 
